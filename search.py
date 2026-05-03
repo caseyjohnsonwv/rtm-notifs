@@ -89,6 +89,8 @@ def search_keyword(
     limit: int = 20,
     sort_by: str = "date",
     sort_order: str = "desc",
+    created_since: str = "",
+    updated_since: str = "",
     db_path: Union[Path, str] = DB_PATH,
 ) -> List[sqlite3.Row]:
     sort_columns = {
@@ -98,6 +100,15 @@ def search_keyword(
     }
     order_sql = "ASC" if sort_order.lower() == "asc" else "DESC"
     sort_expr = sort_columns.get(sort_by, sort_columns["date"])
+
+    where_clauses = ["products_fts MATCH ?"]
+    params: List[Any] = [query]
+    if created_since:
+        where_clauses.append("p.created_date >= ?")
+        params.append(created_since)
+    if updated_since:
+        where_clauses.append("p.updated_date >= ?")
+        params.append(updated_since)
 
     conn = get_connection(db_path)
     try:
@@ -111,11 +122,12 @@ def search_keyword(
                 p.updated_date
             FROM products_fts
             JOIN products p ON p.id = products_fts.id
-            WHERE products_fts MATCH ?
+            WHERE {' AND '.join(where_clauses)}
             ORDER BY {sort_expr} {order_sql}
             LIMIT ?
         """
-        cur = conn.execute(sql, (query, int(limit)))
+        params.append(int(limit))
+        cur = conn.execute(sql, tuple(params))
         return cur.fetchall()
     finally:
         conn.close()
@@ -141,10 +153,27 @@ def main() -> None:
     parser.add_argument(
         "--order", choices=["asc", "desc"], default="desc", help="Sort direction"
     )
+    parser.add_argument(
+        "--created-since",
+        dest="created_since",
+        default="",
+        help="Include only rows with created_date >= this value",
+    )
+    parser.add_argument(
+        "--updated-since",
+        dest="updated_since",
+        default="",
+        help="Include only rows with updated_date >= this value",
+    )
     args = parser.parse_args()
 
     rows = search_keyword(
-        args.query, limit=args.limit, sort_by=args.sort_by, sort_order=args.order
+        args.query,
+        limit=args.limit,
+        sort_by=args.sort_by,
+        sort_order=args.order,
+        created_since=args.created_since,
+        updated_since=args.updated_since,
     )
     if not rows:
         return
