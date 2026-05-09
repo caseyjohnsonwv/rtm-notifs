@@ -7,15 +7,14 @@ from typing import Any
 import apprise
 
 
-def _build_message(name: str, rows: list[dict[str, Any]]) -> str:
+def _build_message(rows: list[dict[str, Any]]) -> str:
     lines: list[str] = []
     for row in rows:
         name = str(row.get("name") or "").strip().replace("\n", " ")
         price = row.get("price")
         updated = str(row.get("updated_date") or "")
         lines.append(f"{name} (${price})\nUpdated: {updated}")
-    msg_rows = "\n\n".join(lines).strip()
-    return f"{name}\n\n{msg_rows}"
+    return "\n\n".join(lines).strip()
 
 
 def run(name: str, topic_env: str) -> int:
