@@ -1,10 +1,39 @@
 import argparse
 import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Iterable, List, Mapping, Union
 
 DB_PATH = Path("products.db")
+
+
+def _compile_ts_regex(regex_literal: str) -> re.Pattern:
+    # Strictly require /pattern/flags syntax.
+    if not regex_literal.startswith("/") or regex_literal.count("/") < 2:
+        raise ValueError("Expected TypeScript regex literal format: /pattern/flags")
+
+    last_slash = regex_literal.rfind("/")
+    if last_slash <= 0:
+        raise ValueError("Expected TypeScript regex literal format: /pattern/flags")
+
+    pattern = regex_literal[1:last_slash]
+    flags_str = regex_literal[last_slash + 1 :]
+
+    flags = 0
+    for ch in flags_str:
+        if ch == "i":
+            flags |= re.IGNORECASE
+        elif ch == "m":
+            flags |= re.MULTILINE
+        elif ch == "s":
+            flags |= re.DOTALL
+        elif ch == "":
+            continue
+        else:
+            raise ValueError(f"Unsupported regex flag: {ch}")
+
+    return re.compile(pattern, flags)
 
 
 def get_connection(db_path: Union[Path, str] = DB_PATH) -> sqlite3.Connection:
@@ -84,11 +113,11 @@ def rebuild_index(
         conn.close()
 
 
-def search_keyword(
-    query: str,
+def search_regex(
+    regex_pattern: str,
     limit: int = 20,
-    sort_by: str = "date",
-    sort_order: str = "desc",
+    order_by: str = "date",
+    sort: str = "desc",
     created_since: str = "",
     updated_since: str = "",
     db_path: Union[Path, str] = DB_PATH,
@@ -98,11 +127,11 @@ def search_keyword(
         "price": "p.price",
         "date": "p.updated_date",
     }
-    order_sql = "ASC" if sort_order.lower() == "asc" else "DESC"
-    sort_expr = sort_columns.get(sort_by, sort_columns["date"])
+    order_sql = "ASC" if sort.lower() == "asc" else "DESC"
+    sort_expr = sort_columns.get(order_by, sort_columns["date"])
 
-    where_clauses = ["products_fts MATCH ?"]
-    params: List[Any] = [query]
+    where_clauses: List[str] = []
+    params: List[Any] = []
     if created_since:
         where_clauses.append("p.created_date >= ?")
         params.append(created_since)
@@ -112,6 +141,7 @@ def search_keyword(
 
     conn = get_connection(db_path)
     try:
+        where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
         sql = f"""
             SELECT
                 p.id,
@@ -120,15 +150,24 @@ def search_keyword(
                 p.absolute_site_link,
                 p.price,
                 p.updated_date
-            FROM products_fts
-            JOIN products p ON p.id = products_fts.id
-            WHERE {' AND '.join(where_clauses)}
+            FROM products p
+            WHERE {where_sql}
             ORDER BY {sort_expr} {order_sql}
             LIMIT ?
         """
-        params.append(int(limit))
+        params.append(int(max(limit * 5, limit)))
         cur = conn.execute(sql, tuple(params))
-        return cur.fetchall()
+        rows = cur.fetchall()
+
+        compiled = _compile_ts_regex(regex_pattern)
+        filtered = []
+        for row in rows:
+            haystack = f"{row['name'] or ''}\n{row['description'] or ''}"
+            if compiled.search(haystack):
+                filtered.append(row)
+                if len(filtered) >= limit:
+                    break
+        return filtered
     finally:
         conn.close()
 
@@ -142,16 +181,15 @@ def _snippet(text: str, max_len: int = 140) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Keyword search products index")
-    parser.add_argument("query", help="FTS query string")
     parser.add_argument("--limit", type=int, default=100, help="Max results")
     parser.add_argument(
-        "--sort-by",
+        "--order-by",
         choices=["name", "price", "date"],
         default="date",
-        help="Sort column",
+        help="Order-by column",
     )
     parser.add_argument(
-        "--order", choices=["asc", "desc"], default="desc", help="Sort direction"
+        "--sort", choices=["asc", "desc"], default="desc", help="Sort direction"
     )
     parser.add_argument(
         "--created-since",
@@ -165,16 +203,26 @@ def main() -> None:
         default="",
         help="Include only rows with updated_date >= this value",
     )
+    parser.add_argument(
+        "--regex",
+        required=True,
+        help="Regex in TS-style /pattern/flags (supports i,m,s)",
+    )
     args = parser.parse_args()
 
-    rows = search_keyword(
-        args.query,
-        limit=args.limit,
-        sort_by=args.sort_by,
-        sort_order=args.order,
-        created_since=args.created_since,
-        updated_since=args.updated_since,
-    )
+    try:
+        rows = search_regex(
+            args.regex,
+            limit=args.limit,
+            order_by=args.order_by,
+            sort=args.sort,
+            created_since=args.created_since,
+            updated_since=args.updated_since,
+        )
+    except ValueError as exc:
+        raise SystemExit(f"Invalid --regex: {exc}")
+    except re.error as exc:
+        raise SystemExit(f"Invalid --regex pattern: {exc}")
     if not rows:
         return
 

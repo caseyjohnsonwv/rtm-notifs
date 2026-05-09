@@ -8,7 +8,7 @@ from search import DB_PATH, rebuild_index
 
 BASE_URL = "https://cdn5.editmysite.com/app/store/api/v28/editor/users/152199704/sites/171034537763690384/products"
 PER_PAGE = 100
-BATCH_SIZE = 5
+PARALLEL_PAGES = 5
 
 
 def fetch_page(page):
@@ -44,10 +44,10 @@ def run_scrape(write_json: bool = False, json_path: str = "temp.json") -> int:
     all_products = extract(body)
 
     remaining = list(range(2, total_pages + 1))
-    for i in range(0, len(remaining), BATCH_SIZE):
-        batch = remaining[i : i + BATCH_SIZE]
+    for i in range(0, len(remaining), PARALLEL_PAGES):
+        batch = remaining[i : i + PARALLEL_PAGES]
         results = {}
-        with ThreadPoolExecutor(max_workers=BATCH_SIZE) as executor:
+        with ThreadPoolExecutor(max_workers=PARALLEL_PAGES) as executor:
             futures = {executor.submit(fetch_page, p): p for p in batch}
             for future in as_completed(futures):
                 page, page_body = future.result()
