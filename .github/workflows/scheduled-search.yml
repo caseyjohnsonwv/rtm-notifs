@@ -1,0 +1,40 @@
+name: Scheduled Search Notify
+
+on:
+  schedule:
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: scheduled-search-notify
+  cancel-in-progress: true
+
+jobs:
+  scrape-search-notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Scrape and rebuild DB
+        run: uv run scrape.py
+
+      - name: Search and notify chains
+        env:
+          NTFY_TOPIC_WDI_ITEMS: ${{ secrets.NTFY_TOPIC_WDI_ITEMS }}
+          NTFY_TOPIC_COUNTRY_BEARS: ${{ secrets.NTFY_TOPIC_COUNTRY_BEARS }}
+        run: |
+          uv run search.py --regex '/wdi|imagineer/i' --order-by date --sort desc | uv run notify_from_jsonl.py --name 'WDI Items' --topic-env NTFY_TOPIC_WDI_ITEMS
+          uv run search.py --regex '/country\s*bear/i' --order-by date --sort desc | uv run notify_from_jsonl.py --name 'Country Bears Items' --topic-env NTFY_TOPIC_COUNTRY_BEARS
