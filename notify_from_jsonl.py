@@ -1,20 +1,25 @@
 import argparse
+from datetime import datetime
 import json
 import os
 import sys
 from typing import Any
 
 import apprise
+import pytz
+
+
+US_EAST_TZ = pytz.timezone('US/Eastern')
 
 
 def _build_message(rows: list[dict[str, Any]]) -> str:
     lines: list[str] = []
-    for row in rows:
-        name = str(row.get("name") or "").strip().replace("\n", " ")
-        price = row.get("price")
-        updated = str(row.get("updated_date") or "")
-        lines.append(f"{name} (${price})\nUpdated: {updated}")
-    return "\n\n".join(lines).strip()
+    for i,row in enumerate(rows):
+        name = str(row["name"]).strip().replace("\n", " ")
+        price = float(row["price"])
+        updated = datetime.fromisoformat(str(row["updated_date"])).astimezone(US_EAST_TZ).strftime('%-I:%M%p on %-m/%-d/%Y').lower()
+        lines.append(f"#{i+1} - ${price:.2f}\n{name}\n(Updated at {updated})")
+    return "\n\n-----\n".join(lines).strip()
 
 
 def run(name: str, topic_env: str) -> int:
