@@ -41,7 +41,7 @@ def run(name: str, topic_env: str) -> int:
         return 0
 
     title = f"{name}: {len(rows)} match(es)"
-    body = _build_message(name, rows)
+    body = _build_message(rows)
 
     apobj = apprise.Apprise()
     apprise_url = f"ntfy://{topic}"
