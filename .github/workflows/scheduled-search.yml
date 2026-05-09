@@ -36,5 +36,5 @@ jobs:
           NTFY_TOPIC_WDI_ITEMS: ${{ secrets.NTFY_TOPIC_WDI_ITEMS }}
           NTFY_TOPIC_COUNTRY_BEARS: ${{ secrets.NTFY_TOPIC_COUNTRY_BEARS }}
         run: |
-          uv run search.py --regex '/wdi|imagineer/i' --order-by date --sort desc | uv run notify_from_jsonl.py --name 'WDI Items' --topic-env NTFY_TOPIC_WDI_ITEMS
-          uv run search.py --regex '/country\s*bear/i' --order-by date --sort desc | uv run notify_from_jsonl.py --name 'Country Bears Items' --topic-env NTFY_TOPIC_COUNTRY_BEARS
+          uv run search.py --regex '/wdi|imagineer/i' --order-by date --sort desc | uv run notify_from_jsonl.py --name 'RTM WDI Items' --topic-env NTFY_TOPIC_WDI_ITEMS
+          uv run search.py --regex '/country\s*bear/i' --order-by date --sort desc | uv run notify_from_jsonl.py --name 'RTM Country Bears Items' --topic-env NTFY_TOPIC_COUNTRY_BEARS_ITEMS

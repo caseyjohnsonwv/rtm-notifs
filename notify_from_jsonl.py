@@ -7,15 +7,15 @@ from typing import Any
 import apprise
 
 
-def _build_message(rows: list[dict[str, Any]]) -> str:
+def _build_message(name: str, rows: list[dict[str, Any]]) -> str:
     lines: list[str] = []
     for row in rows:
         name = str(row.get("name") or "").strip().replace("\n", " ")
         price = row.get("price")
         updated = str(row.get("updated_date") or "")
-        link = str(row.get("absolute_site_link") or "")
         lines.append(f"{name} (${price})\nUpdated: {updated}")
-    return "\n\n".join(lines).strip()
+    msg_rows = "\n\n".join(lines).strip()
+    return f"{name}\n\n{msg_rows}"
 
 
 def run(name: str, topic_env: str) -> int:
@@ -42,7 +42,7 @@ def run(name: str, topic_env: str) -> int:
         return 0
 
     title = f"{name}: {len(rows)} match(es)"
-    body = _build_message(rows)
+    body = _build_message(name, rows)
 
     apobj = apprise.Apprise()
     apprise_url = f"ntfy://{topic}"
