@@ -11,5 +11,4 @@ wheels/
 
 # Other stuff
 *.json
-.python-version
 *.db
